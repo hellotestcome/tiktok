@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Live Treasure Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Thư viện nhận dữ liệu Real-time từ Server -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen font-sans pb-10">
+
+    <!-- Header -->
+    <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-box-open text-yellow-400 text-2xl animate-bounce"></i>
+                <h1 class="text-lg font-bold bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
+                    TikTok Chest Hunter Realtime
+                </h1>
+            </div>
+            <span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ĐANG QUÉT LIVE
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto px-4 py-6">
+        
+        <!-- Thanh nhập tay để quét nhanh -->
+        <div class="bg-gray-900 p-4 rounded-xl border border-gray-800 mb-6 flex gap-2">
+            <input type="text" id="manualInput" placeholder="Nhập @username TikTok cần quét thủ công..." class="bg-gray-950 border border-gray-700 text-xs text-white rounded-lg px-3 py-2.5 outline-none focus:border-yellow-500 flex-1">
+            <button onclick="triggerManualScan()" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs px-4 py-2.5 rounded-lg transition">
+                Quét Thêm
+            </button>
+        </div>
+
+        <!-- Danh sách rương hiển thị dạng lưới -->
+        <div id="chestContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Dữ liệu sẽ tự động điền vào đây -->
+        </div>
+    </main>
+
+    <script>
+        // ==========================================
+        // THAY LINK RENDER CỦA BẠN VÀO DƯỚI ĐÂY (Ví dụ: https://tiktok.onrender.com)
+        // ==========================================
+        const SOCKET_URL = "https://ten-du-an-render-cua-ban.onrender.com"; 
+        
+        const socket = io(SOCKET_URL);
+        let liveMap = new Map();
+
+        // Lắng nghe danh sách rương ban đầu khi vừa vào web
+        socket.on('initChests', (chests) => {
+            chests.forEach(c => liveMap.set(c.id, c));
+            renderUI();
+        });
+
+        // Lắng nghe khi có rương mới xuất hiện từ server
+        socket.on('newChest', (chest) => {
+            liveMap.set(chest.id, chest);
+            renderUI();
+        });
+
+        // Lắng nghe khi live kết thúc hoặc hết rương
+        socket.on('removeChest', (id) => {
+            liveMap.delete(id);
+            renderUI();
+        });
+
+        function renderUI() {
+            const container = document.getElementById('chestContainer');
+            
+            if (liveMap.size === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full text-center py-16 text-gray-500">
+                        <i class="fa-solid fa-radar text-4xl mb-3 animate-spin"></i>
+                        <p class="text-sm">Đang dò tìm phiên live có rương xu...</p>
+                    </div>`;
+                return;
+            }
+
+            let html = '';
+            liveMap.forEach((stream, id) => {
+                html += `
+                <div class="bg-gray-900 border border-gray-800 hover:border-yellow-500/50 rounded-xl p-4 transition-all duration-300 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2.5">
+                                <img src="${stream.avatar}" class="w-10 h-10 rounded-full border border-yellow-500/30 object-cover" onerror="this.src='https://i.pravatar.cc/100?img=1'">
+                                <div>
+                                    <h3 class="font-bold text-sm text-gray-100">@${stream.username}</h3>
+                                    <span class="text-[10px] text-emerald-400 font-medium">● Sẵn sàng mở</span>
+                                </div>
+                            </div>
+                            <span class="bg-yellow-500/10 text-yellow-400 font-bold text-xs px-2.5 py-1 rounded-full border border-yellow-500/20 flex items-center gap-1">
+                                <i class="fa-solid fa-coins"></i> ${stream.coins} Xu
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-800/80 pt-3 flex items-center justify-between mt-2">
+                        <div>
+                            <div class="text-[10px] text-gray-400">Mở rương sau</div>
+                            <div id="timer-${id}" class="text-sm font-bold text-emerald-400 font-mono">${formatTime(stream.timeLeft)}</div>
+                        </div>
+                        <a href="https://www.tiktok.com/@${stream.username}/live" target="_blank" class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 transition">
+                            Vào Nhặt Ngay <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        // Đếm ngược thời gian từng giây & tự xóa card khi hết giờ
+        setInterval(() => {
+            let needsRender = false;
+            liveMap.forEach((stream, id) => {
+                if (stream.timeLeft > 0) {
+                    stream.timeLeft--;
+                    const timerElem = document.getElementById(`timer-${id}`);
+                    if (timerElem) timerElem.innerText = formatTime(stream.timeLeft);
+                } else {
+                    liveMap.delete(id);
+                    needsRender = true;
+                }
+            });
+            if (needsRender) renderUI();
+        }, 1000);
+
+        // Gửi yêu cầu quét thủ công lên Server
+        function triggerManualScan() {
+            const input = document.getElementById('manualInput');
+            const val = input.value.trim();
+            if (val) {
+                socket.emit('manualScan', val);
+                input.value = '';
+                alert('Đã gửi yêu cầu quét phòng @' + val);
+            }
+        }
+    </script>
+</body>
+</html>
