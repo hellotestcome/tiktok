@@ -6,8 +6,8 @@ const io = new Server(http, {
     cors: { origin: "*" }
 });
 
-const TikTokLiveConnector = require('tiktok-live-connector');
-const WebcastPushConnection = TikTokLiveConnector.WebcastPushConnection || TikTokLiveConnector;
+const tiktokModule = require('tiktok-live-connector');
+const WebcastPushConnection = tiktokModule.WebcastPushConnection || tiktokModule;
 
 // Lưu trữ danh sách phòng đang có rương real-time
 let activeChests = new Map();
@@ -15,35 +15,40 @@ let activeChests = new Map();
 // Hàm kết nối và quét rương của 1 tài khoản TikTok đang Live
 function monitorStream(username) {
     let cleanUser = username.replace('@', '').trim();
-    let tiktokLiveConnection = new WebcastPushConnection(cleanUser);
+    
+    try {
+        let tiktokLiveConnection = new WebcastPushConnection(cleanUser);
 
-    tiktokLiveConnection.connect().then(state => {
-        console.log(`Đã kết nối thành công phòng live: @${cleanUser} (Room ID: ${state.roomId})`);
-    }).catch(err => {
-        console.log(`Phòng @${cleanUser} không online hoặc lỗi kết nối.`);
-    });
+        tiktokLiveConnection.connect().then(state => {
+            console.log(`Đã kết nối thành công phòng live: @${cleanUser} (Room ID: ${state.roomId})`);
+        }).catch(err => {
+            console.log(`Phòng @${cleanUser} không online hoặc lỗi kết nối.`);
+        });
 
-    // Lắng nghe sự kiện rương báu / túi xu xuất hiện trong phiên live
-    tiktokLiveConnection.on('treasureBox', data => {
-        console.log(`[RƯƠNG XU MỚI] Từ @${cleanUser}:`, data);
-        
-        const chestInfo = {
-            id: cleanUser,
-            username: cleanUser,
-            avatar: `https://p16-sign-va.tiktokcdn.com/tos-maliva-avt-0068/${cleanUser}.jpeg`,
-            coins: data.coins || 100,
-            timeLeft: data.duration || 180
-        };
+        // Lắng nghe sự kiện rương báu / túi xu xuất hiện trong phiên live
+        tiktokLiveConnection.on('treasureBox', data => {
+            console.log(`[RƯƠNG XU MỚI] Từ @${cleanUser}:`, data);
+            
+            const chestInfo = {
+                id: cleanUser,
+                username: cleanUser,
+                avatar: `https://p16-sign-va.tiktokcdn.com/tos-maliva-avt-0068/${cleanUser}.jpeg`,
+                coins: data.coins || 100,
+                timeLeft: data.duration || 180
+            };
 
-        activeChests.set(cleanUser, chestInfo);
-        io.emit('newChest', chestInfo);
-    });
+            activeChests.set(cleanUser, chestInfo);
+            io.emit('newChest', chestInfo);
+        });
 
-    tiktokLiveConnection.on('streamEnd', () => {
-        console.log(`Phòng @${cleanUser} đã tắt live.`);
-        activeChests.delete(cleanUser);
-        io.emit('removeChest', cleanUser);
-    });
+        tiktokLiveConnection.on('streamEnd', () => {
+            console.log(`Phòng @${cleanUser} đã tắt live.`);
+            activeChests.delete(cleanUser);
+            io.emit('removeChest', cleanUser);
+        });
+    } catch (e) {
+        console.log("Lỗi khởi tạo kết nối live:", e.message);
+    }
 }
 
 // Danh sách các username TikTok đang live mẫu
